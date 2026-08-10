@@ -357,6 +357,57 @@ dependency of a dependency. Use:
 PUPPETEER_SKIP_DOWNLOAD=true npm ci --omit=dev
 ```
 
+### The Amplify app region is not necessarily the Bedrock region
+
+Amplify Hosting deploys the backend into **the Amplify app's own region**, which
+is whatever region the console was set to when the app was created. It is easy
+to create the app in us-east-1 without noticing.
+
+That breaks a hardcoded Bedrock region in two ways at once. The Lambda's
+`BedrockRuntimeClient` defaults to `AWS_REGION`, so it calls Bedrock in the
+deployment region, while the IAM policy names a different one. The result is
+`AccessDenied` on a policy that looks correct.
+
+Keep the two explicitly separate:
+
+```ts
+// backend.ts - the region the IAM policies name
+const BEDROCK_REGION = 'us-west-2';
+fn.addEnvironment('BEDROCK_REGION', BEDROCK_REGION);
+
+// handler - do not let this default to AWS_REGION
+new BedrockRuntimeClient({ region: process.env.BEDROCK_REGION });
+```
+
+The `region` value published through `backend.addOutput` must be the opposite:
+`assetsStack.region`, the deployment region, because the CLI scripts use it to
+reach Lambda and S3.
+
+### npm ci fails on a lockfile that npm install just wrote
+
+The Amplify build runs `npm ci`, which refuses to install when
+`package.json` and `package-lock.json` disagree:
+
+```
+npm error `npm ci` can only install packages when your package.json and
+npm error package-lock.json or npm-shrinkwrap.json are in sync.
+npm error Missing: @aws-cdk/toolkit-lib@1.19.0 from lock file
+```
+
+The lockfile did contain that package, at a different version. Regenerating with
+a plain `npm install` did not fix it, because the resolution was influenced by
+what was already in `node_modules`. Resolving purely from the registry did:
+
+```bash
+rm -rf node_modules package-lock.json
+npm install --package-lock-only
+npm ci --dry-run     # verify before pushing
+```
+
+Anything that writes to `node_modules` outside a normal install can leave the
+lockfile in this state, including `npm install --no-save`. The failure only
+appears in CI, so `npm ci --dry-run` is worth running locally before a push.
+
 ### Amplify Gen 2 details
 
 - **`defineFunction` defaults to a 3 second timeout.** Any model call fails.

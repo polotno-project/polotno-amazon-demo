@@ -9,10 +9,14 @@ import { removeBackground } from './functions/remove-background/resource';
 import { saveDesign } from './functions/save-design/resource';
 import { renderDesign } from './functions/render-design/resource';
 
-// Stability image models are not available everywhere. us-west-2 is the only
-// region that serves Stable Image Core AND is a destination of the "us" geo
+// The region Bedrock is called in. This is deliberately independent of the
+// region the rest of the backend is deployed to: Amplify Hosting provisions the
+// backend into the Amplify app's own region, and Stability image models are not
+// available everywhere.
+//
+// us-west-2 serves Stable Image Core and is a destination of the "us" geo
 // inference profile that background removal requires.
-const REGION = 'us-west-2';
+const BEDROCK_REGION = 'us-west-2';
 
 // Polotno keys are visible in the browser by design, so this is not a secret
 // and does not belong in Secrets Manager. The fallback is Polotno's public
@@ -105,7 +109,7 @@ backend.generateImage.resources.lambda.addToRolePolicy(
     effect: iam.Effect.ALLOW,
     actions: ['bedrock:InvokeModel'],
     resources: [
-      `arn:aws:bedrock:${REGION}::foundation-model/stability.stable-image-core-v1:1`,
+      `arn:aws:bedrock:${BEDROCK_REGION}::foundation-model/stability.stable-image-core-v1:1`,
     ],
   }),
 );
@@ -120,7 +124,7 @@ backend.removeBackground.resources.lambda.addToRolePolicy(
     effect: iam.Effect.ALLOW,
     actions: ['bedrock:InvokeModel'],
     resources: [
-      `arn:aws:bedrock:${REGION}:${assetsStack.account}:inference-profile/us.stability.stable-image-remove-background-v1:0`,
+      `arn:aws:bedrock:${BEDROCK_REGION}:${assetsStack.account}:inference-profile/us.stability.stable-image-remove-background-v1:0`,
       ...['us-east-1', 'us-east-2', 'us-west-2'].map(
         (region) =>
           `arn:aws:bedrock:${region}::foundation-model/stability.stable-image-remove-background-v1:0`,
@@ -177,6 +181,12 @@ for (const fn of [backend.generateImage, backend.removeBackground, backend.saveD
 // Only remove-background needs the bare host, for its SSRF allowlist.
 backend.removeBackground.addEnvironment('ASSETS_BUCKET_HOST', assetsHost);
 
+// Call Bedrock in the region the IAM policies above name, whatever region this
+// backend happens to be deployed to.
+for (const fn of [backend.generateImage, backend.removeBackground]) {
+  fn.addEnvironment('BEDROCK_REGION', BEDROCK_REGION);
+}
+
 // The render function gets the same treatment, but note what does NOT work
 // here: Amplify's secret() helper. Its resolver runs from a banner that only
 // the bundled esbuild path injects, so a secret passed to a provided function
@@ -190,7 +200,10 @@ backend.renderDesign.addEnvironment('POLOTNO_API_KEY', POLOTNO_API_KEY);
 
 backend.addOutput({
   custom: {
-    region: REGION,
+    // The DEPLOYMENT region, which scripts/render.mjs uses to reach Lambda and
+    // S3. Not the Bedrock region: Amplify Hosting deploys into the Amplify
+    // app's own region, which may differ.
+    region: assetsStack.region,
     assetsBucketName: assets.bucketName,
     assetsPublicBaseUrl,
     renderFunctionName: backend.renderDesign.resources.lambda.functionName,

@@ -12,9 +12,16 @@ export const GENERATE_MODEL_ID = 'stability.stable-image-core-v1:1';
 // it with the bare ID fails.
 export const REMOVE_BG_MODEL_ID = 'us.stability.stable-image-remove-background-v1:0';
 
-// The Lambda runs in the same region as the models. The SDK reads AWS_REGION,
-// which Lambda always sets.
-const client = new BedrockRuntimeClient({});
+// Bedrock is called in BEDROCK_REGION, which is NOT necessarily the region the
+// Lambda runs in. Amplify Hosting deploys the backend into the Amplify app's
+// own region, and Stability image models are not available everywhere, so the
+// two must be able to differ. The IAM policies in backend.ts grant exactly this
+// region, and the "us." geo inference profile requires the caller to be in
+// us-east-1, us-east-2 or us-west-2.
+//
+// Leaving this to default to AWS_REGION gives AccessDenied the moment the app
+// is created in a region other than the one the policies name.
+const client = new BedrockRuntimeClient({ region: process.env.BEDROCK_REGION });
 
 /**
  * Calls a Stability image model and returns the raw PNG bytes.
