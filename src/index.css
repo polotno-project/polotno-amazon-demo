@@ -1,0 +1,47 @@
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* The top bar reads Polotno's own theme variables, so it follows the editor
+   in light and dark mode without any extra work. */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  color: var(--card-foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.topbar strong {
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.error {
+  color: var(--destructive);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ai-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  overflow: auto;
+}

@@ -1,0 +1,40 @@
+version: 1
+backend:
+  phases:
+    preBuild:
+      commands:
+        # Pin Node 22 LTS. Amplify targets it, and it is the runtime the
+        # functions use. On Node 23 and later, ampx crashes on startup because
+        # @typescript/vfs calls localStorage.getItem at import time.
+        - nvm use 22 || nvm install 22
+        - npm ci --cache .npm --prefer-offline
+        # The render Lambda ships a real node_modules tree, because it needs a
+        # Chromium binary on disk. Two details matter here:
+        #
+        # 1. This MUST run before ampx. Code.fromAsset does not fail on a
+        #    missing node_modules, so without it the build goes green and the
+        #    function dies on its first invoke. (amplify/functions/
+        #    render-design/resource.ts also guards against this at synth time.)
+        #
+        # 2. polotno-node depends on the full `puppeteer` package, whose
+        #    postinstall downloads about 170 MB of Chrome that is never used.
+        #    `--omit=dev` does not skip it, because it is a production
+        #    dependency of a dependency.
+        - (cd render-lambda && PUPPETEER_SKIP_DOWNLOAD=true npm ci --omit=dev)
+    build:
+      commands:
+        - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+frontend:
+  phases:
+    build:
+      commands:
+        - npm run build
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - .npm/**/*
+      - node_modules/**/*
+      - render-lambda/node_modules/**/*

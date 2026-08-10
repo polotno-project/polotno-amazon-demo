@@ -1,0 +1,19 @@
+# AWS credentials live inside this project, so they must never be committed.
+.aws/
+
+node_modules/
+render-lambda/node_modules/
+dist/
+.amplify/
+amplify_outputs.json
+amplify_outputs*
+.npm/
+
+# Local output of scripts/check-bedrock.mjs and scripts/render.mjs
+out/
+*.local
+
+.DS_Store
+.vscode/
+.idea/
+npm-debug.log*

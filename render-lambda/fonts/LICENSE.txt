@@ -1,0 +1,12 @@
+The .ttf files in this folder are the Liberation Fonts, version 2.1.5.
+
+They are metric-compatible replacements for Arial, Times New Roman and
+Courier New. AWS Lambda has no system fonts, so these are shipped inside the
+deployment package. See fonts.conf for how fontconfig finds them.
+
+Copyright (c) 2012 Red Hat, Inc.
+Licensed under the SIL Open Font License, Version 1.1.
+https://github.com/liberationfonts/liberation-fonts
+https://openfontlicense.org/
+
+Source of these binaries: the Debian package fonts-liberation2 2.1.5-1.

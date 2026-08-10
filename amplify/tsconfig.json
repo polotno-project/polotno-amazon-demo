@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "es2022",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "paths": {
+      // Amplify writes typed environment-variable shims here during synth.
+      // These files do not exist until the first `npm run sandbox`, so a fresh
+      // clone shows an editor error on this import until then.
+      "$amplify/*": ["../.amplify/generated/*"]
+    }
+  }
+}
