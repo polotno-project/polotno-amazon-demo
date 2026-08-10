@@ -30,7 +30,9 @@ every problem found while building this.
 
 ## Prerequisites
 
-- Node.js 22 or later (`node --version`)
+- **Node.js 22 LTS.** Node 23 and later expose a `localStorage` global that
+  crashes the Amplify CLI on startup. `scripts/with-aws.sh` works around it, but
+  22 is the tested version.
 - An AWS account with a payment method. Bedrock subscribes to Stability models
   through AWS Marketplace on the first call.
 - A GitHub account, for the hosting step only
@@ -100,7 +102,17 @@ that background removal needs. See `NOTES.md`.
 
 ## 4. Run it locally
 
-Start the backend sandbox. It creates real AWS resources in your account and
+The first deploy into a region needs a one-off CDK bootstrap. Without it the
+sandbox stops and tells you to sign in to the console as root, which you do not
+have to do:
+
+```bash
+npx aws-cdk@2 bootstrap aws://<your-account-id>/us-west-2
+```
+
+`npm run whoami` prints your account ID.
+
+Now start the backend sandbox. It creates real AWS resources in your account and
 writes `amplify_outputs.json`. Leave it running.
 
 ```bash
