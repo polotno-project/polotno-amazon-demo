@@ -1,11 +1,7 @@
-// Proves that the two Bedrock models this demo needs are reachable BEFORE any
-// backend code depends on them, and records the latency that goes into NOTES.md.
+// Proves that the two Bedrock models this demo needs are reachable, before any
+// backend code depends on them.
 //
 // Run:  npm run check:bedrock
-//
-// Why this exists: Stable Image Core has no model card and no row on the Bedrock
-// pricing page, and the Stability doc page says other Stability models "are in
-// the process of being deprecated". Do not build on it without checking first.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { BedrockClient, ListFoundationModelsCommand } from '@aws-sdk/client-bedrock';
@@ -42,20 +38,17 @@ function fail(step, error) {
   // This message is the confusing one. It names neither billing nor access.
   if (/Operation not allowed/i.test(error.message)) {
     console.error(
-      '\n"Operation not allowed" is a 400 from Bedrock, NOT an IAM error. It means\n' +
-        'the account cannot invoke models. Run this to see which gate is closed:\n' +
-        '\n  GetFoundationModelAvailability -> agreementAvailability / authorizationStatus\n' +
-        '\nTwo different causes produce the same message:\n' +
-        '  agreement=NOT_AVAILABLE or ERROR\n' +
-        '      The AWS Marketplace subscription failed. Usually the account has no\n' +
-        '      chargeable payment method, and the agreement is created and then\n' +
-        '      terminated within seconds. Fix billing, then subscribe again.\n' +
-        '  agreement=AVAILABLE but authorizationStatus=NOT_AUTHORIZED\n' +
-        '      Billing is fine and the account is still not authorized to invoke\n' +
-        '      ANY model, including Amazon first-party models, in any region.\n' +
-        '      Only AWS Support can lift this. The Bedrock "Model access" console\n' +
-        '      page is retired and has nothing to click.\n' +
-        '\nSee NOTES.md, "Bedrock account authorization".',
+      '\n"Operation not allowed" is a 400 from Bedrock, NOT an IAM error. The\n' +
+        'account cannot invoke models. GetFoundationModelAvailability says which\n' +
+        'gate is closed, and two different causes give this same message:\n' +
+        '\n  agreement=NOT_AVAILABLE or ERROR\n' +
+        '    The AWS Marketplace subscription failed, usually because the account\n' +
+        '    has no chargeable payment method. The agreement is created and then\n' +
+        '    terminated seconds later. Fix billing, then subscribe again.\n' +
+        '\n  agreement=AVAILABLE but authorizationStatus=NOT_AUTHORIZED\n' +
+        '    Billing is fine and the account still cannot invoke ANY model, in any\n' +
+        '    region, including Amazon first-party ones. Only AWS Support can lift\n' +
+        '    this. The Bedrock "Model access" console page is retired.',
     );
   }
   process.exit(1);
@@ -108,7 +101,7 @@ try {
 if (!listed.includes(GENERATE_MODEL_ID)) {
   console.warn(
     `\nWARNING: ${GENERATE_MODEL_ID} is NOT in the list above for ${REGION}.\n` +
-      'Switch the demo to stability.stable-image-ultra-v1:1 and record it in NOTES.md.',
+      'Switch the demo to stability.stable-image-ultra-v1:1.',
   );
 }
 

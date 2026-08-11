@@ -1,199 +1,82 @@
 # Polotno + Amazon Bedrock demo
 
 A design editor that generates images with Amazon Bedrock, removes their
-backgrounds, saves the design to S3, and renders that design to a PNG in a
-Lambda.
+backgrounds, and renders designs to PNG in a Lambda.
 
-| Part | Technology |
-| --- | --- |
-| Editor | Vite, React 19, [Polotno SDK](https://polotno.com) |
-| Backend | AWS Amplify Gen 2, `defineFunction` behind AppSync, API-key auth |
-| AI | Amazon Bedrock, Stability AI models |
-| Batch render | AWS Lambda, `polotno-node`, `@sparticuz/chromium`, `puppeteer-core` |
-| Hosting | AWS Amplify Hosting |
+Vite + React + [Polotno SDK](https://polotno.com), AWS Amplify Gen 2, Amazon
+Bedrock (Stability AI), and `polotno-node` on Lambda. No user accounts: the
+editor calls an AppSync API with an API key, and every AWS call happens in a
+Lambda, so no credentials reach the browser.
 
-There are no user accounts, no database and no Cognito. AWS credentials never
-reach the browser: the editor calls an AppSync API with an API key, and every
-AWS call happens inside a Lambda.
+**Live demo:** https://master.d14zoxlel0nhyt.amplifyapp.com/
 
-`NOTES.md` records the model IDs, the IAM policies, the Lambda configuration and
-every problem found while building this.
-
-## What it does
-
-1. **AI side panel → Generate image.** A prompt goes to Bedrock. The image
-   lands on the canvas.
-2. **Select an image → Remove background.** Bedrock returns a transparent PNG
-   and replaces the element's source.
+1. **AI panel → Generate image.** A prompt goes to Bedrock, the image lands on
+   the canvas.
+2. **Select an image → Remove background.** Bedrock returns a transparent PNG.
 3. **Save & render.** The design JSON goes to S3, then a Lambda running
-   `polotno-node` renders it to a PNG in S3 and the editor links to it.
-4. **`npm run render`.** The same Lambda, triggered from the command line for
-   batch use.
+   `polotno-node` renders it to a PNG and the editor links to it.
+4. **`npm run render`.** The same Lambda from the command line, for batch use.
 
 ## Prerequisites
 
-- **Node.js 22 LTS.** Node 23 and later expose a `localStorage` global that
-  crashes the Amplify CLI on startup. `scripts/with-aws.sh` works around it, but
-  22 is the tested version.
+- **Node.js 22 LTS.** Node 23+ crashes the Amplify CLI on startup.
 - An AWS account with a payment method. Bedrock subscribes to Stability models
   through AWS Marketplace on the first call.
-- A GitHub account, for the hosting step only
 
-You do **not** need the AWS CLI. This project uses the AWS SDK for JavaScript
-and the Amplify CLI (`ampx`), both installed by `npm install`.
+No AWS CLI needed — this uses `ampx` and the AWS SDK for JavaScript.
 
-## 1. Install
+## Setup
 
 ```bash
-git clone https://github.com/lavrton/polotno-amazon-demo.git
-cd polotno-amazon-demo
 npm install
-cd render-lambda && PUPPETEER_SKIP_DOWNLOAD=true npm install && cd ..
+(cd render-lambda && PUPPETEER_SKIP_DOWNLOAD=true npm install)
 ```
 
-The second install is separate on purpose. The render Lambda ships a real
-`node_modules` folder, because it needs a Chromium binary on disk. It comes to
-about 130 MB. `PUPPETEER_SKIP_DOWNLOAD` stops `puppeteer` from downloading a
-desktop Chrome that this project never uses.
+The second install is separate because the render Lambda ships its own
+`node_modules` with a Chromium binary (~130 MB).
 
-## 2. AWS credentials
-
-Credentials stay inside this project. Nothing reads or writes `~/.aws`.
-
-1. In the AWS console open **IAM → Users → Create user**.
-2. Attach the **AdministratorAccess** policy. Amplify creates
-   CloudFormation stacks, IAM roles, Lambda functions, an S3 bucket and an
-   AppSync API.
-3. Open the new user, choose **Security credentials → Create access key**, and
-   select **Command Line Interface (CLI)**.
-4. Write the key into `.aws/credentials` in this folder:
+Credentials stay inside this project; nothing touches `~/.aws`. Create an IAM
+user with `AdministratorAccess`, then:
 
 ```bash
-mkdir -p .aws
-cat > .aws/credentials <<'EOF'
+mkdir -p .aws && cat > .aws/credentials <<'EOF'
 [default]
 aws_access_key_id = AKIA...
 aws_secret_access_key = ...
 EOF
+npm run whoami          # confirms the key works, prints your account ID
 ```
 
-`.aws/` is in `.gitignore`. Confirm that the key works:
+## Run
 
 ```bash
-npm run whoami
+npx aws-cdk@2 bootstrap aws://<account-id>/us-west-2   # once per region
+npm run check:bedrock   # confirms both models are reachable
+npm run sandbox         # deploys the backend, leave running
+npm run dev             # editor on localhost:5173
 ```
 
-## 3. Confirm that Bedrock works
+`npm run render -- designs/<uuid>.json` renders a saved design and downloads it
+to `out/render.png`. `npm run sandbox:delete` removes everything.
 
-Run this before deploying anything. It lists the Stability models that your
-account can reach in `us-west-2`, then calls both models for real and writes
-two PNGs to `out/`.
+## Deploy
 
-```bash
-npm run check:bedrock
-```
+Amplify console → **Create new app** → GitHub → pick this repo and branch. It
+reads `amplify.yml` from the repo; do not edit build settings in the console.
+Set `_BUILD_TIMEOUT` = `60` in the app's environment variables. The first build
+takes about 15 minutes.
 
-The first call in a new AWS account subscribes it to the Stability models
-through AWS Marketplace. That can take up to 15 minutes, and returns
-`AccessDeniedException` until it finishes. If that happens, wait and run the
-command again.
+## Region and models
 
-**The region is fixed at `us-west-2`.** It is the only region that serves
-Stable Image Core and is also a destination of the `us` geo inference profile
-that background removal needs. See `NOTES.md`.
+Fixed to **us-west-2**, the only region serving both:
 
-## 4. Run it locally
+| Purpose | Model ID |
+| --- | --- |
+| Text to image | `stability.stable-image-core-v1:1` ($0.04/image) |
+| Background removal | `us.stability.stable-image-remove-background-v1:0` ($0.07/image) |
 
-The first deploy into a region needs a one-off CDK bootstrap. Without it the
-sandbox stops and tells you to sign in to the console as root, which you do not
-have to do:
+The `us.` prefix on background removal is mandatory — it has no in-region
+support. Stable Image Core is the opposite: the prefix is invalid there.
 
-```bash
-npx aws-cdk@2 bootstrap aws://<your-account-id>/us-west-2
-```
-
-`npm run whoami` prints your account ID.
-
-Now start the backend sandbox. It creates real AWS resources in your account and
-writes `amplify_outputs.json`. Leave it running.
-
-```bash
-npm run sandbox
-```
-
-In a second terminal:
-
-```bash
-npm run dev
-```
-
-Open the URL that Vite prints. The **AI** tab is the first side panel section.
-
-To remove the sandbox and everything in it:
-
-```bash
-npm run sandbox:delete
-```
-
-## 5. Render a design in Lambda
-
-Press **Save & render** in the editor toolbar. It uploads the design JSON to S3,
-calls the render Lambda, and shows an **Open PNG** link.
-
-The same Lambda can be triggered from the command line, which is the batch case:
-
-```bash
-npm run render -- designs/1f0c….json
-```
-
-It writes the PNG to S3 and downloads it to `out/render.png`. Design keys look
-like `designs/<uuid>.json`; you can list them in the S3 bucket named in
-`amplify_outputs.json`.
-
-The browser route goes through AppSync, which has a fixed 30 second request
-limit. The Lambda itself allows 120 seconds, so a very heavy design still
-renders and lands in S3 even if the browser gives up waiting.
-
-## 6. Deploy to Amplify Hosting
-
-1. Push this repository to GitHub.
-2. Open the **AWS Amplify** console in **us-west-2** and choose **Create new
-   app → GitHub**. Authorise Amplify and select the repository and branch.
-3. Amplify reads `amplify.yml` from the repository. Do not edit the build
-   settings in the console.
-4. Under **Advanced settings → Environment variables** add:
-   - `_BUILD_TIMEOUT` = `60`. The default is 30 minutes, and this build
-     installs a Chromium package and uploads an 85 MB Lambda asset.
-   - `VITE_POLOTNO_KEY` = your Polotno key. Optional. Without it the app uses
-     Polotno's public demo key, which shows a watermark.
-5. Deploy. The first build creates the backend and takes about 15 minutes.
-
-The build role needs permission to create the same resources as step 2. The
-service role that Amplify offers to create for you is enough.
-
-## Cost
-
-Everything except Bedrock stays inside the AWS free tier at demo volumes.
-Bedrock charges per image. `NOTES.md` has the numbers.
-
-Delete the sandbox with `npm run sandbox:delete` and delete the Amplify app in
-the console when you are finished. The S3 bucket empties itself on delete.
-
-## Layout
-
-```
-amplify/
-  backend.ts                     S3 bucket, IAM policies, environment, outputs
-  data/resource.ts               the three API operations
-  functions/
-    generate-image/              Bedrock text to image
-    remove-background/           Bedrock background removal
-    save-design/                 design JSON to S3
-    render-design/resource.ts    CDK definition of the render Lambda
-    shared/                      Bedrock and S3 helpers
-render-lambda/                   the render Lambda, with its own dependencies
-  index.mjs
-  fonts/                         Liberation fonts. Lambda has no system fonts.
-scripts/                         check-bedrock, render, whoami
-src/                             the editor
-```
+Bedrock is called in us-west-2 regardless of where the backend is deployed, via
+the `BEDROCK_REGION` environment variable.
