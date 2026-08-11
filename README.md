@@ -79,8 +79,12 @@ Fixed to **us-west-2**, the only region serving both:
 
 | Purpose | Model ID |
 | --- | --- |
-| Text to image | `stability.stable-image-core-v1:1` ($0.04/image) |
-| Background removal | `us.stability.stable-image-remove-background-v1:0` ($0.07/image) |
+| Text to image | `stability.stable-image-core-v1:1` |
+| Background removal | `us.stability.stable-image-remove-background-v1:0` |
+
+Both bill per output image. See
+[Amazon Bedrock pricing](https://aws.amazon.com/bedrock/pricing/) for current
+rates.
 
 The `us.` prefix on background removal is mandatory — it has no in-region
 support. Stable Image Core is the opposite: the prefix is invalid there.
@@ -93,8 +97,8 @@ the `BEDROCK_REGION` environment variable.
 This is a public demo, not a template for production. Known trade-offs:
 
 - **The AppSync API key is public and calls paid Bedrock operations.** Anyone
-  who reads it from the JavaScript bundle can spend your money at $0.04 and
-  $0.07 per image. Before leaving a deployment up, set an
+  who reads it from the JavaScript bundle can spend your money, billed per
+  generated image. Before leaving a deployment up, set an
   [AWS Budget alert](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html),
   and consider AWS WAF rate limiting on the AppSync API. Real applications
   should authenticate users and rate limit per user instead.
