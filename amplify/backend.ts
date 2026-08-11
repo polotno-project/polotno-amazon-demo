@@ -76,17 +76,19 @@ const assets = new s3.Bucket(assetsStack, 'AssetsBucket', {
   ],
 });
 
-// Public read on images/ only. designs/ and renders/ stay private.
+// Public read on images/ and renders/. designs/ stays private, because it is
+// the input the render Lambda reads and nothing else should.
 //
 // Presigned URLs were the alternative and they are wrong here: they expire, and
-// a design saved today has to still render next week.
+// a design saved today has to still render next week. Both prefixes hold
+// derived images with nothing secret in them.
 assets.addToResourcePolicy(
   new iam.PolicyStatement({
-    sid: 'PublicReadImagesPrefix',
+    sid: 'PublicReadGeneratedImages',
     effect: iam.Effect.ALLOW,
     principals: [new iam.AnyPrincipal()],
     actions: ['s3:GetObject'],
-    resources: [assets.arnForObjects('images/*')],
+    resources: [assets.arnForObjects('images/*'), assets.arnForObjects('renders/*')],
   }),
 );
 
@@ -192,6 +194,7 @@ for (const fn of [backend.generateImage, backend.removeBackground]) {
 // the bundled esbuild path injects, so a secret passed to a provided function
 // arrives as an unresolved placeholder string. Plain strings only.
 backend.renderDesign.addEnvironment('ASSETS_BUCKET_NAME', assets.bucketName);
+backend.renderDesign.addEnvironment('ASSETS_PUBLIC_BASE_URL', assetsPublicBaseUrl);
 backend.renderDesign.addEnvironment('POLOTNO_API_KEY', POLOTNO_API_KEY);
 
 // ---------------------------------------------------------------------------

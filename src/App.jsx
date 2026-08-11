@@ -1,14 +1,12 @@
-import React from 'react';
 import { PolotnoContainer, SidePanelWrap, WorkspaceWrap } from 'polotno';
 import { createStore } from 'polotno/model/store';
 import { SidePanel, DEFAULT_SECTIONS } from 'polotno/side-panel';
 import { Workspace } from 'polotno/canvas/workspace';
 import { Toolbar } from 'polotno/toolbar/toolbar';
 import { ZoomButtons } from 'polotno/toolbar/zoom-buttons';
-import { Button } from 'polotno/primitives';
 
 import { AiSection } from './AiPanel.jsx';
-import { saveDesign } from './api.js';
+import ActionControls from './ActionControls.jsx';
 
 // A Polotno key is meant to be visible in the browser, so it is not a secret.
 // Without VITE_POLOTNO_KEY this falls back to Polotno's public demo key.
@@ -43,45 +41,21 @@ page.addElement({
 
 const sections = [AiSection, ...DEFAULT_SECTIONS];
 
+// Must be defined outside the render function, or the toolbar remounts it on
+// every render and the button loses its state.
+const toolbarComponents = { ActionControls };
+
 export default function App() {
-  const [status, setStatus] = React.useState(null);
-  const [saving, setSaving] = React.useState(false);
-
-  const onSave = async () => {
-    setStatus(null);
-    setSaving(true);
-    try {
-      const key = await saveDesign(JSON.stringify(store.toJSON()));
-      setStatus({ ok: true, text: `Saved. Render it: npm run render -- ${key}` });
-    } catch (e) {
-      setStatus({ ok: false, text: e.message });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <>
-      <div className="topbar">
-        <strong>Polotno + Amazon Bedrock</strong>
-        <Button size="sm" variant="secondary" disabled={saving} onClick={onSave}>
-          {saving ? 'Saving…' : 'Save design'}
-        </Button>
-        {status && (
-          <span className={status.ok ? 'muted' : 'error'}>{status.text}</span>
-        )}
-      </div>
-
-      <PolotnoContainer style={{ width: '100vw', height: 'calc(100vh - 45px)' }}>
-        <SidePanelWrap>
-          <SidePanel store={store} sections={sections} defaultSection="ai" />
-        </SidePanelWrap>
-        <WorkspaceWrap>
-          <Toolbar store={store} />
-          <Workspace store={store} />
-          <ZoomButtons store={store} />
-        </WorkspaceWrap>
-      </PolotnoContainer>
-    </>
+    <PolotnoContainer style={{ width: '100vw', height: '100vh' }}>
+      <SidePanelWrap>
+        <SidePanel store={store} sections={sections} defaultSection="ai" />
+      </SidePanelWrap>
+      <WorkspaceWrap>
+        <Toolbar store={store} components={toolbarComponents} />
+        <Workspace store={store} />
+        <ZoomButtons store={store} />
+      </WorkspaceWrap>
+    </PolotnoContainer>
   );
 }

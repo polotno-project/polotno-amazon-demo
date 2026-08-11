@@ -7,25 +7,6 @@ body,
   overflow: hidden;
 }
 
-/* The top bar reads Polotno's own theme variables, so it follows the editor
-   in light and dark mode without any extra work. */
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 44px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--card);
-  color: var(--card-foreground);
-  font-family: var(--font-sans);
-  font-size: 14px;
-}
-
-.topbar strong {
-  font-weight: 600;
-}
-
 .muted {
   color: var(--muted-foreground);
   font-size: 12px;

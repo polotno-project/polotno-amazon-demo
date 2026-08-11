@@ -21,3 +21,6 @@ export const removeBackground = async (imageUrl) =>
 
 export const saveDesign = async (json) =>
   unwrap(await client.mutations.saveDesign({ json }));
+
+export const renderDesign = async (designKey) =>
+  unwrap(await client.queries.renderDesign({ designKey }));

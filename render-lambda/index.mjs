@@ -1,13 +1,14 @@
 // Batch render: a Polotno design JSON in S3 becomes a PNG in S3.
 //
-// Invoked directly, not through an API. Run `npm run render -- <designKey>`
-// from the project root.
+// Two callers, one handler:
+//   - AppSync, from the editor's "Save & render" button. The event carries
+//     { arguments: { designKey } }.
+//   - The CLI, `npm run render -- designs/<uuid>.json`, which invokes the
+//     function directly with { designKey }.
 //
-// Event:  { "designKey": "designs/<uuid>.json", "pixelRatio": 1 }
-// Result: { "key": "renders/<uuid>.png", "bucket": "...", "bytes": 123456 }
-//
-// The result never carries the image itself. A synchronous Lambda response is
-// capped at 6 MB and a rendered page passes that easily.
+// It returns the public URL as a plain string, because the AppSync operation
+// declares `.returns(a.string())`. Never the image itself: a synchronous Lambda
+// response is capped at 6 MB and a rendered page passes that easily.
 
 import { randomUUID } from 'node:crypto';
 import chromium from '@sparticuz/chromium';
@@ -17,9 +18,10 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3
 
 const s3 = new S3Client({});
 const BUCKET = process.env.ASSETS_BUCKET_NAME;
+const PUBLIC_BASE_URL = process.env.ASSETS_PUBLIC_BASE_URL;
 
 export const handler = async (event) => {
-  const designKey = event?.designKey;
+  const designKey = event?.arguments?.designKey ?? event?.designKey;
   if (!designKey || !designKey.startsWith('designs/')) {
     throw new Error('designKey is required and must start with "designs/".');
   }
@@ -68,7 +70,7 @@ export const handler = async (event) => {
     // 3. Render.
     const base64 = await instance.jsonToImageBase64(json, {
       mimeType: 'image/png',
-      pixelRatio: event.pixelRatio ?? 1,
+      pixelRatio: event?.arguments?.pixelRatio ?? event?.pixelRatio ?? 1,
       // The default is 6000 ms. A cold Lambda downloads every Google Font in
       // the design over the network, and 6 s is not always enough. Too short a
       // value silently falls back to a default font instead of failing.
@@ -77,7 +79,7 @@ export const handler = async (event) => {
     });
     const png = Buffer.from(base64, 'base64');
 
-    // 4. Write the PNG. renders/ is private, unlike images/.
+    // 4. Write the PNG.
     // No ACL property: the bucket uses BUCKET_OWNER_ENFORCED ownership and
     // rejects any PutObject that carries one.
     const key = `renders/${randomUUID()}.png`;
@@ -87,12 +89,14 @@ export const handler = async (event) => {
         Key: key,
         Body: png,
         ContentType: 'image/png',
+        CacheControl: 'public, max-age=31536000, immutable',
       }),
     );
 
-    const ms = Date.now() - startedAt;
-    console.log(`Rendered ${designKey} -> ${key} (${png.length} bytes, ${ms} ms)`);
-    return { key, bucket: BUCKET, bytes: png.length, ms };
+    console.log(
+      `Rendered ${designKey} -> ${key} (${png.length} bytes, ${Date.now() - startedAt} ms)`,
+    );
+    return `${PUBLIC_BASE_URL}${key}`;
   } finally {
     // close() shuts the browser down too, so guard against a failure before
     // the instance existed.

@@ -25,8 +25,10 @@ every problem found while building this.
    lands on the canvas.
 2. **Select an image → Remove background.** Bedrock returns a transparent PNG
    and replaces the element's source.
-3. **Save design.** The design JSON goes to S3.
-4. **`npm run render`.** A Lambda reads that JSON and writes a PNG to S3.
+3. **Save & render.** The design JSON goes to S3, then a Lambda running
+   `polotno-node` renders it to a PNG in S3 and the editor links to it.
+4. **`npm run render`.** The same Lambda, triggered from the command line for
+   batch use.
 
 ## Prerequisites
 
@@ -135,15 +137,22 @@ npm run sandbox:delete
 
 ## 5. Render a design in Lambda
 
-Press **Save design** in the editor. It prints a key such as
-`designs/1f0c….json`. Then:
+Press **Save & render** in the editor toolbar. It uploads the design JSON to S3,
+calls the render Lambda, and shows an **Open PNG** link.
+
+The same Lambda can be triggered from the command line, which is the batch case:
 
 ```bash
 npm run render -- designs/1f0c….json
 ```
 
-The Lambda reads the JSON, renders it and writes a PNG to S3. The script
-downloads it to `out/render.png`.
+It writes the PNG to S3 and downloads it to `out/render.png`. Design keys look
+like `designs/<uuid>.json`; you can list them in the S3 bucket named in
+`amplify_outputs.json`.
+
+The browser route goes through AppSync, which has a fixed 30 second request
+limit. The Lambda itself allows 120 seconds, so a very heavy design still
+renders and lands in S3 even if the browser gives up waiting.
 
 ## 6. Deploy to Amplify Hosting
 

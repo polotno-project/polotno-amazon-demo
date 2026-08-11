@@ -1,6 +1,10 @@
-// Triggers the batch render Lambda and downloads the result.
+// Triggers the batch render Lambda from the command line and downloads the PNG.
 //
 //   npm run render -- designs/<uuid>.json
+//
+// The editor's "Save & render" button calls the same Lambda through AppSync.
+// This script invokes it directly, which is why it needs AWS credentials while
+// the browser does not.
 //
 // Everything it needs comes from amplify_outputs.json, which the sandbox and
 // the Amplify Hosting build both write.
@@ -8,7 +12,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
-import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 const designKey = process.argv[2];
 if (!designKey) {
@@ -25,11 +28,11 @@ try {
   process.exit(1);
 }
 
-const { region, renderFunctionName, assetsBucketName } = custom;
+const { region, renderFunctionName } = custom;
 console.log(`Invoking ${renderFunctionName} in ${region} for ${designKey} ...`);
 
-const lambda = new LambdaClient({ region });
-const response = await lambda.send(
+const startedAt = Date.now();
+const response = await new LambdaClient({ region }).send(
   new InvokeCommand({
     FunctionName: renderFunctionName,
     Payload: JSON.stringify({ designKey }),
@@ -47,16 +50,12 @@ if (response.FunctionError) {
   process.exit(1);
 }
 
-console.log(`Rendered in ${payload.ms} ms, ${payload.bytes} bytes -> ${payload.key}`);
+// The handler returns the public URL, because the AppSync operation it also
+// serves declares a String return type.
+console.log(`Rendered in ${Date.now() - startedAt} ms -> ${payload}`);
 
-// renders/ is private, so download it through the SDK rather than over HTTP.
-const s3 = new S3Client({ region });
-const object = await s3.send(
-  new GetObjectCommand({ Bucket: assetsBucketName, Key: payload.key }),
-);
-
+const image = Buffer.from(await (await fetch(payload)).arrayBuffer());
 mkdirSync(new URL('../out/', import.meta.url), { recursive: true });
-const localPath = new URL('../out/render.png', import.meta.url);
-writeFileSync(localPath, Buffer.from(await object.Body.transformToByteArray()));
+writeFileSync(new URL('../out/render.png', import.meta.url), image);
 
-console.log(`Saved to out/render.png`);
+console.log(`Saved ${image.length} bytes to out/render.png`);

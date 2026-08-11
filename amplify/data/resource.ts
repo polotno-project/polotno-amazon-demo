@@ -3,6 +3,7 @@ import { a, defineData, type ClientSchema } from '@aws-amplify/backend';
 import { generateImage } from '../functions/generate-image/resource';
 import { removeBackground } from '../functions/remove-background/resource';
 import { saveDesign } from '../functions/save-design/resource';
+import { renderDesign } from '../functions/render-design/resource';
 
 const schema = a.schema({
   // Every Bedrock result is written to S3 and only its URL crosses the wire.
@@ -51,6 +52,23 @@ const schema = a.schema({
     .returns(a.string()) // the S3 key, for example "designs/<uuid>.json"
     .authorization((allow) => [allow.publicApiKey()])
     .handler(a.handler.function(saveDesign)),
+
+  // Render a saved design to a PNG, in the same Lambda that the CLI script
+  // triggers. AppSync can use a plain CDK function as a resolver, because
+  // defineFunction(provider) returns the factory type that a.handler.function
+  // expects, so no second Lambda is needed.
+  //
+  // Note this call inherits AppSync's fixed 30 s request limit, while the
+  // Lambda itself may run for 120 s. A design heavy enough to pass 30 s still
+  // finishes and writes its PNG, but the caller sees a timeout.
+  renderDesign: a
+    .query()
+    .arguments({
+      designKey: a.string().required(),
+    })
+    .returns(a.string()) // public URL of the rendered PNG
+    .authorization((allow) => [allow.publicApiKey()])
+    .handler(a.handler.function(renderDesign)),
 });
 
 export type Schema = ClientSchema<typeof schema>;

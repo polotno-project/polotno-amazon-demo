@@ -163,6 +163,33 @@ backend, because Amplify's normal `defineFunction` path bundles the handler with
 esbuild and this function needs a real `node_modules` tree on disk. See
 `amplify/functions/render-design/resource.ts`.
 
+### A plain CDK function can still be an AppSync resolver
+
+Useful and not obvious: `defineFunction(provider)` returns the same factory type
+that `a.handler.function()` accepts, so the render Lambda serves the editor's
+"Save & render" button **and** the CLI, with no second Lambda and no API
+Gateway:
+
+```ts
+renderDesign: a
+  .query()
+  .arguments({ designKey: a.string().required() })
+  .returns(a.string())
+  .authorization((allow) => [allow.publicApiKey()])
+  .handler(a.handler.function(renderDesign)),
+```
+
+The two callers deliver different event shapes, so the handler reads both:
+
+```js
+const designKey = event?.arguments?.designKey ?? event?.designKey;
+```
+
+The AppSync path inherits the fixed 30 s request limit while the Lambda keeps a
+120 s timeout, deliberately. Lowering the Lambda to fit AppSync would cripple
+the batch path, which is the point of the function. A design heavy enough to
+pass 30 s still finishes and writes its PNG; only the browser sees a timeout.
+
 ## Fonts in Lambda
 
 This is the part that costs people the most time.
@@ -442,8 +469,9 @@ appears in CI, so `npm ci --dry-run` is worth running locally before a push.
   answers `s3.amazonaws.com` with a 307 redirect, and a redirect breaks an
   `<img crossorigin="anonymous">`.
 - **Public prefix, not presigned URLs.** Presigned URLs expire; a design saved
-  today has to still render next week. Only `images/` is world-readable.
-  `designs/` and `renders/` return 403 to anonymous requests.
+  today has to still render next week. `images/` and `renders/` are
+  world-readable, because both hold derived images with nothing secret in them.
+  `designs/` stays private and returns 403 to anonymous requests.
 - `removalPolicy: DESTROY` plus `autoDeleteObjects: true`, otherwise
   `ampx sandbox delete` fails on a bucket that is not empty.
 
@@ -503,7 +531,9 @@ Verified against real AWS:
 - `saveDesign` round trip: browser to AppSync with an API key, to Lambda, to S3.
 - Render Lambda: design JSON from S3 to PNG in S3, 3.4 s, all five font families
   correct.
-- `designs/` and `renders/` return HTTP 403 to anonymous requests.
+- `designs/` returns HTTP 403 to anonymous requests; `renders/` returns 200.
+- The editor's "Save & render" button, through AppSync: save 1.5 s, render
+  6.5 s including Lambda cold start. The same Lambda from the CLI: 1.4 s warm.
 - All eight input-validation and SSRF paths, through AppSync.
 - Marketplace pricing, model IDs, inference types and region availability.
 
