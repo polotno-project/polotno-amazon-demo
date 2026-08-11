@@ -1,5 +1,5 @@
 import { defineBackend } from '@aws-amplify/backend';
-import { RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 
@@ -63,6 +63,10 @@ const assets = new s3.Bucket(assetsStack, 'AssetsBucket', {
   // empty. CDK rejects autoDeleteObjects unless removalPolicy is DESTROY.
   removalPolicy: RemovalPolicy.DESTROY,
   autoDeleteObjects: true,
+  // Nothing in this demo is meant to be kept. Expiring everything after 30 days
+  // bounds storage cost, and limits how long any generated image stays
+  // publicly readable. Raise or remove it if you need designs to persist.
+  lifecycleRules: [{ id: 'ExpireDemoObjects', expiration: Duration.days(30) }],
   // The editor loads these images into a canvas and later exports that canvas.
   // Without CORS the browser taints the canvas and the export fails.
   cors: [

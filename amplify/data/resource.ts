@@ -84,6 +84,9 @@ export const data = defineData({
   // allow.publicApiKey(). A missing one fails at query time, not at deploy time.
   authorizationModes: {
     defaultAuthorizationMode: 'apiKey',
-    apiKeyAuthorizationMode: { expiresInDays: 30 },
+    // 365 is the AppSync maximum. A 30 day key silently kills a public demo a
+    // month after launch, and rotating it means redeploying the frontend
+    // because the key is baked into amplify_outputs.json.
+    apiKeyAuthorizationMode: { expiresInDays: 365 },
   },
 });
