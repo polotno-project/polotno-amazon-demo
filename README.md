@@ -8,8 +8,6 @@ Bedrock (Stability AI), and `polotno-node` on Lambda. No user accounts: the
 editor calls an AppSync API with an API key, and every AWS call happens in a
 Lambda, so no credentials reach the browser.
 
-**Live demo:** https://master.d14zoxlel0nhyt.amplifyapp.com/
-
 1. **AI panel → Generate image.** A prompt goes to Bedrock, the image lands on
    the canvas.
 2. **Select an image → Remove background.** Bedrock returns a transparent PNG.
@@ -22,6 +20,9 @@ Lambda, so no credentials reach the browser.
 - **Node.js 22 LTS.** Node 23+ crashes the Amplify CLI on startup.
 - An AWS account with a payment method. Bedrock subscribes to Stability models
   through AWS Marketplace on the first call.
+- A Polotno API key from [polotno.com/login](https://polotno.com/login). Set it
+  as `VITE_POLOTNO_KEY`. Optional — without it the app uses the public demo key,
+  which watermarks the canvas.
 
 No AWS CLI needed — this uses `ampx` and the AWS SDK for JavaScript.
 
